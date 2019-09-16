@@ -1,0 +1,162 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  labels:
+    app: elastic-stack
+    component: elasticsearch
+spec:
+  serviceName: elasticsearch
+  selector:
+    matchLabels:
+      app: elastic-stack
+      component: elasticsearch
+  replicas: 3
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 30Gi
+      # For OpenStack RBD resource
+      storageClassName: rbd
+  template:
+    metadata:
+      labels:
+        app: elastic-stack
+        component: elasticsearch
+    spec:
+      securityContext:
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - elastic-stack
+              - key: component
+                operator: In
+                values:
+                - elasticsearch
+            topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 120
+      volumes:
+      - name: config
+        configMap:
+          name: elasticsearch
+      initContainers:
+      - name: sysctl
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.3.0
+        imagePullPolicy: IfNotPresent
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        #resources:
+        #  limits:
+        #    cpu: 2
+        #    memory: 512Mi
+        #  requests:
+        #    cpu: 1
+        #    memory: 256Mi
+        securityContext:
+          runAsUser: 0
+          privileged: true
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.3.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: node.name
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: cluster.initial_master_nodes
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: discovery.zen.minimum_master_nodes
+          value: "2"
+        - name: discovery.zen.ping.unicast.hosts
+          value: elasticsearch-discovery
+        #- name: discovery.seed_hosts
+        #  value: elasticsearch-discovery
+        - name: cluster.name
+          value: elastic-cluster
+        - name: network.host
+          value: "0.0.0.0"
+        - name: ES_JAVA_OPTS
+          value: "-Xmx4g -Xms4g"
+        - name: node.ingest
+          value: "true"
+        - name: node.data
+          value: "true"
+        - name: action.auto_create_index
+          value: "*"
+        ports:
+        - name: http
+          containerPort: 9200
+        - name: transport
+          containerPort: 9300
+        resources:
+          requests:
+            cpu: 1
+            memory: 4Gi
+          limits:
+            cpu: 4
+            memory: 8Gi
+        securityContext:
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        #readinessProbe:
+        #  failureThreshold: 3
+        #  initialDelaySeconds: 10
+        #  periodSeconds: 10
+        #  successThreshold: 3
+        #  timeoutSeconds: 5
+        #  exec:
+        #    command:
+        #      - sh
+        #      - -c
+        #      - |
+        #        #!/usr/bin/env bash -e
+        #        # If the node is starting up wait for the cluster to be ready (request params: '{{ .Values.clusterHealthCheckParams }}' )
+        #          # Once it has started only check that the node itself is responding
+        #          START_FILE=/tmp/.es_start_file
+        #          http () {
+        #              local path="${1}"
+        #              if [ -n "${ELASTIC_USERNAME}" ] && [ -n "${ELASTIC_PASSWORD}" ]; then
+        #                BASIC_AUTH="-u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}"
+        #              else
+        #                BASIC_AUTH=''
+        #              fi
+        #              curl -XGET -s -k --fail ${BASIC_AUTH} {{ .Values.protocol }}://127.0.0.1:{{ .Values.httpPort }}${path}
+        #          }
+        #          if [ -f "${START_FILE}" ]; then
+        #              echo 'Elasticsearch is already running, lets check the node is healthy'
+        #              http "/"
+        #          else
+        #              echo 'Waiting for elasticsearch cluster to become cluster to be ready (request params: "{{ .Values.clusterHealthCheckParams }}" )'
+        #              if http "/_cluster/health?{{ .Values.clusterHealthCheckParams }}" ; then
+        #                  touch ${START_FILE}
+        #                  exit 0
+        #              else
+        #                  echo 'Cluster is not yet ready (request params: "{{ .Values.clusterHealthCheckParams }}" )'
+        #                  exit 1
+        #              fi
+        #          fi
+        volumeMounts:
+          - name: data
+            mountPath: /usr/share/elasticsearch/data
+          - name: config
+            mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+            subPath: elasticsearch.yml

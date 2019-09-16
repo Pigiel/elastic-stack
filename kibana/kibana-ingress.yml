@@ -1,0 +1,15 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: kibana
+  labels:
+    app: elastic-stack
+    component: kibana
+spec:
+  rules:
+    - host: kibana.localhost
+      http:
+        paths:
+          - backend:
+              serviceName: kibana
+              servicePort: 5601

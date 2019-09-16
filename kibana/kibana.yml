@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  labels:
+    app: elastic-stack
+    component: kibana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: elastic-stack
+      component: kibana
+  template:
+    metadata:
+      labels:
+        app: elastic-stack
+        component: kibana
+    spec:
+      securityContext:
+        fsGroup: 1000
+      volumes:
+      - name: config
+        configMap:
+          name: kibana-config
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:7.3.0
+        imagePullPolicy: IfNotPresent
+        env:
+        # - name: ELASTICSEARCH_URL
+        #   value: http://elasticsearch:9200
+        - name: ELASTICSEARCH_HOSTS
+          value: http://elasticsearch:9200
+        - name: SERVER_HOST
+          value: "0.0.0.0"
+        #readinessProbe:
+        #  failureThreshold: 3
+        #  initialDelaySeconds: 10
+        #  periodSeconds: 10
+        #  successThreshold: 3
+        #  timeoutSeconds: 5
+        #  exec:
+        #    command:
+        #      - sh
+        #      - -c
+        #      - |
+        #        #!/usr/bin/env bash -e
+        #        http () {
+        #            local path="${1}"
+        #            set -- -XGET -s --fail
+        #            if [ -n "${ELASTIC_USERNAME}" ] && [ -n "${ELASTIC_PASSWORD}" ]; then
+        #              set -- "$@" -u "${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}"
+        #            fi
+        #            curl -k "$@" "{{ .Values.protocol }}://localhost:{{ .Values.httpPort }}${path}"
+        #        }
+        #        http "{{ .Values.healthCheckPath }}
+        ports:
+        - name: http
+          containerPort: 5601
+        resources:
+          requests:
+            cpu: 1
+            memory: 2Gi
+          limits:
+            cpu: 2
+            memory: 4Gi
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/kibana/config/kibana.yml
+          subPath: kibana.yml
