@@ -24,7 +24,7 @@ Set the following values in the `yml` files for your needs
       storageClassName: rbd
 
       containers:
-      	# Set JAVA options for Elasticsearch
+        # Set JAVA options for Elasticsearch
         env:
         - name: ES_JAVA_OPTS
           value: "-Xmx4g -Xms4g"
@@ -42,7 +42,7 @@ Set the following values in the `yml` files for your needs
 
 ```yml
       containers:
-      	# Limit resources based on available architecture
+        # Limit resources based on available architecture
         resources:
           requests:
             cpu: 1
